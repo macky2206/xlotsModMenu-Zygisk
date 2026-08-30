@@ -24,42 +24,60 @@ namespace Drawing
 }
 
 void Drawing::InitMenu(std::function<void(int, int)> drawFunction) {
+    LOGI("InitMenu started");
     DrawFunction = std::move(drawFunction);
 
     LOGI("Waiting for libEGL.so and libinput.so...");
     while (!Utility::IsLibraryLoaded("libEGL.so") || !Utility::IsLibraryLoaded("libinput.so")) {
         sleep(1);
     }
+    LOGI("Libraries loaded. libEGL: 0x%lx, libinput: 0x%lx",
+         Utility::GetBaseAddress("libEGL.so"), Utility::GetBaseAddress("libinput.so"));
 
     void* eglSwapBuffers = DobbySymbolResolver("libEGL.so", "eglSwapBuffers");
     if (eglSwapBuffers) {
+        LOGI("Found eglSwapBuffers at %p, hooking...", eglSwapBuffers);
         DobbyHook(eglSwapBuffers, (void *)SwapBuffersHook, (void **)&SwapBuffers);
-        LOGI("eglSwapBuffers hooked");
+        LOGI("eglSwapBuffers hooked successfully");
+    } else {
+        LOGE("Failed to find eglSwapBuffers in libEGL.so");
     }
 
-    // Try multiple symbols for input initialization
+    // Try multiple symbols for input initialization (mangled names vary by Android version)
     const char* inputSymbols[] = {
-        "_ZN7android13InputConsumer21initializeMotionEventEPNS_11MotionEventEPKNS_12InputMessageE",
-        "_ZN7android13InputConsumer21initializeMotionEventEPNS_11MotionEventEPKNS_12InputMessageEb"
+        "_ZN7android13InputConsumer21initializeMotionEventEPNS_11MotionEventEPKNS_12InputMessageE",  // A10-A12
+        "_ZN7android13InputConsumer21initializeMotionEventEPNS_11MotionEventEPKNS_12InputMessageEb", // A13+
+        "_ZN7android13InputConsumer21initializeMotionEventEPNS_11MotionEventEPKNS_12InputMessageEv", // Fallback 1
+        "_ZN7android13InputConsumer21initializeMotionEventEPNS_11MotionEventEPNS_12InputMessageE"    // Fallback 2
     };
 
     void* inputMethod = nullptr;
     for (const char* sym : inputSymbols) {
+        LOGI("Trying to resolve input symbol: %s", sym);
         inputMethod = DobbySymbolResolver("libinput.so", sym);
         if (inputMethod) {
-            LOGI("Found input symbol: %s", sym);
+            LOGI("SUCCESS: Found input symbol: %s at %p", sym, inputMethod);
             break;
         }
     }
 
     if (inputMethod) {
+        LOGI("Hooking inputMethod at %p...", inputMethod);
         DobbyHook(inputMethod, (void *)InputHook, (void **)&OriginalInput);
-        LOGI("InputHook applied");
+        LOGI("InputHook applied successfully");
     } else {
-        LOGE("Failed to find InputConsumer::initializeMotionEvent");
+        LOGE("CRITICAL: Failed to find ANY InputConsumer::initializeMotionEvent symbol in libinput.so");
+        LOGI("Falling back to search in libgui.so...");
+        inputMethod = DobbySymbolResolver("libgui.so", inputSymbols[0]);
+        if (inputMethod) {
+             LOGI("Found input symbol in libgui.so at %p", inputMethod);
+             DobbyHook(inputMethod, (void *)InputHook, (void **)&OriginalInput);
+        } else {
+             LOGE("Input initialization hook failed completely.");
+        }
     }
 
-    LOGI("Drawing initialized");
+    LOGI("Drawing initialization sequence finished");
 }
 
 void Drawing::SetupMenu() {
@@ -124,10 +142,13 @@ void Drawing::InternalDrawMenu(int width, int height) {
 
 EGLBoolean Drawing::SwapBuffersHook(EGLDisplay dpy, EGLSurface surf) {
     EGLint w, h;
-    eglQuerySurface(dpy, surf, EGL_WIDTH, &w);
-    eglQuerySurface(dpy, surf, EGL_HEIGHT, &h);
-    GlWidth = w;
-    GlHeight = h;
+    if (eglQuerySurface(dpy, surf, EGL_WIDTH, &w) && eglQuerySurface(dpy, surf, EGL_HEIGHT, &h)) {
+        if (GlWidth != w || GlHeight != h) {
+            LOGI("Surface dimensions changed: %dx%d -> %dx%d", GlWidth, GlHeight, w, h);
+            GlWidth = w;
+            GlHeight = h;
+        }
+    }
 
     SetupMenu();
     InternalDrawMenu(w, h);
@@ -139,9 +160,17 @@ void Drawing::InputHook(void *thiz, void *ex_ab, void *ex_ac, void *ex_ad) {
     // Call original first to let it initialize the MotionEvent object
     if (OriginalInput) {
         ((void (*)(void *, void *, void *, void *))OriginalInput)(thiz, ex_ab, ex_ac, ex_ad);
+    } else {
+        LOGE("InputHook: OriginalInput is NULL!");
+        return;
     }
 
     if (ex_ab != nullptr && IsInitialized && GlWidth > 0 && GlHeight > 0) {
+        // Log touch event occasionally to avoid log flooding
+        static int touchCount = 0;
+        if (++touchCount % 100 == 0) {
+            LOGI("Processing touch event #%d", touchCount);
+        }
         ImGui_ImplAndroid_HandleInputEvent((AInputEvent *)ex_ab);
     }
 }
