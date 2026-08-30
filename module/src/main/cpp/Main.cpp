@@ -4,7 +4,7 @@
 #include "Headers/ModMenu.hpp"
 #include "Include/zygisk.hpp"
 
-#define TARGET_PACKAGE std::string("com.tencent.ig")
+#define TARGET_PACKAGE std::string("com.frivolition.daysbygone")
 
 using zygisk::Api;
 using zygisk::AppSpecializeArgs;

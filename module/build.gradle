@@ -7,10 +7,10 @@ apply plugin: 'com.android.library'
 apply from: file(rootProject.file('module.gradle'))
 
 android {
-    compileSdkVersion rootProject.ext.targetSdkVersion
+    compileSdk rootProject.ext.targetSdkVersion
     defaultConfig {
-        minSdkVersion rootProject.ext.minSdkVersion
-        targetSdkVersion rootProject.ext.targetSdkVersion
+        minSdk rootProject.ext.minSdkVersion
+        targetSdk rootProject.ext.targetSdkVersion
 
         ndk {
             //noinspection ChromeOsAbiSupport
@@ -84,8 +84,8 @@ afterEvaluate {
         tasks.register("zip${variantCapped}", Zip) {
             dependsOn("prepareMagiskFiles${variantCapped}")
             from magiskDir
-            archiveName = zipName
-            destinationDir = outDir
+            archiveFileName.set(zipName)
+            destinationDirectory.set(outDir)
         }
 
         tasks.register("push${variantCapped}", Exec) {

@@ -1,0 +1,50 @@
+name: Build Magisk Module
+
+on:
+  push:
+    branches: [ "main", "master" ]
+  pull_request:
+    branches: [ "main", "master" ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        submodules: recursive
+
+    - name: set up JDK 17
+      uses: actions/setup-java@v4
+      with:
+        java-version: '17'
+        distribution: 'temurin'
+        cache: gradle
+
+    - name: Setup Android NDK
+      uses: nttld/setup-ndk@v1
+      with:
+        ndk-version: r27
+
+    - name: Grant execute permission for gradlew
+      run: chmod +x gradlew
+
+    - name: Build Debug
+      run: ./gradlew :module:zipDebug
+
+    - name: Build Release
+      run: ./gradlew :module:zipRelease
+
+    - name: Upload Debug Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: imgui-modmenu-debug
+        path: out/*-debug.zip
+
+    - name: Upload Release Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: imgui-modmenu-release
+        path: out/*-release.zip

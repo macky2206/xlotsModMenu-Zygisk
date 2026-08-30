@@ -25,17 +25,39 @@ namespace Drawing
 
 void Drawing::InitMenu(std::function<void(int, int)> drawFunction) {
     DrawFunction = std::move(drawFunction);
-    do {
+
+    LOGI("Waiting for libEGL.so and libinput.so...");
+    while (!Utility::IsLibraryLoaded("libEGL.so") || !Utility::IsLibraryLoaded("libinput.so")) {
         sleep(1);
-    } while (!Utility::IsLibraryLoaded("libEGL.so"));
+    }
 
     void* eglSwapBuffers = DobbySymbolResolver("libEGL.so", "eglSwapBuffers");
-    KittyMemory::ProtectAddr(eglSwapBuffers, sizeof(eglSwapBuffers), PROT_READ | PROT_WRITE | PROT_EXEC);
-    DobbyHook(eglSwapBuffers, (void *)SwapBuffersHook, (void **)&SwapBuffers);
+    if (eglSwapBuffers) {
+        DobbyHook(eglSwapBuffers, (void *)SwapBuffersHook, (void **)&SwapBuffers);
+        LOGI("eglSwapBuffers hooked");
+    }
 
-    void* inputMethod = DobbySymbolResolver("/system/lib/libinput.so", "_ZN7android13InputConsumer21initializeMotionEventEPNS_11MotionEventEPKNS_12InputMessageE");
-    KittyMemory::ProtectAddr(inputMethod, sizeof(inputMethod), PROT_READ | PROT_WRITE | PROT_EXEC);
-    DobbyHook(inputMethod, (void *)InputHook, (void **)&OriginalInput);
+    // Try multiple symbols for input initialization
+    const char* inputSymbols[] = {
+        "_ZN7android13InputConsumer21initializeMotionEventEPNS_11MotionEventEPKNS_12InputMessageE",
+        "_ZN7android13InputConsumer21initializeMotionEventEPNS_11MotionEventEPKNS_12InputMessageEb"
+    };
+
+    void* inputMethod = nullptr;
+    for (const char* sym : inputSymbols) {
+        inputMethod = DobbySymbolResolver("libinput.so", sym);
+        if (inputMethod) {
+            LOGI("Found input symbol: %s", sym);
+            break;
+        }
+    }
+
+    if (inputMethod) {
+        DobbyHook(inputMethod, (void *)InputHook, (void **)&OriginalInput);
+        LOGI("InputHook applied");
+    } else {
+        LOGE("Failed to find InputConsumer::initializeMotionEvent");
+    }
 
     LOGI("Drawing initialized");
 }
@@ -50,20 +72,13 @@ void Drawing::SetupMenu() {
     }
 
     ImGuiIO& io = ImGui::GetIO();
-    io.DisplaySize = ImVec2((float)GlWidth, (float)GlHeight);
-    io.ConfigWindowsMoveFromTitleBarOnly = true;
     io.IniFilename = nullptr;
 
     // Setup Platform/Renderer backends
-    ImGui_ImplAndroid_Init();
+    ImGui_ImplAndroid_Init(nullptr);
     ImGui_ImplOpenGL3_Init("#version 300 es");
 
-    int systemScale = (1 / GlWidth) * GlWidth;
-    ImFontConfig font_cfg;
-    font_cfg.SizePixels = static_cast<float>(systemScale * 22);
-    io.Fonts->AddFontFromMemoryTTF(Roboto_Regular, systemScale * 30, 40.0f);
-
-    ImGui::GetStyle().ScaleAllSizes(2);
+    ImGui::GetStyle().ScaleAllSizes(2.0f);
 
     IsInitialized = true;
     LOGI("ImGUI Setup done.");
@@ -72,6 +87,25 @@ void Drawing::SetupMenu() {
 void Drawing::InternalDrawMenu(int width, int height) {
     if (!IsInitialized) return;
 
+    ImGuiIO& io = ImGui::GetIO();
+    io.DisplaySize = ImVec2((float)width, (float)height);
+
+    // Initial font loading if not done
+    static bool fontLoaded = false;
+    if (!fontLoaded) {
+        float systemScale = (float)width / 2220.0f;
+        if (systemScale < 1.0f) systemScale = 1.0f;
+        io.Fonts->AddFontFromMemoryTTF(Roboto_Regular, sizeof(Roboto_Regular), 30.0f * systemScale);
+        fontLoaded = true;
+    }
+
+    // Backup GL state
+    GLint last_program, last_vertex_array, last_array_buffer, last_element_array_buffer;
+    glGetIntegerv(GL_CURRENT_PROGRAM, &last_program);
+    glGetIntegerv(GL_VERTEX_ARRAY_BINDING, &last_vertex_array);
+    glGetIntegerv(GL_ARRAY_BUFFER_BINDING, &last_array_buffer);
+    glGetIntegerv(GL_ELEMENT_ARRAY_BUFFER_BINDING, &last_element_array_buffer);
+
     ImGui_ImplOpenGL3_NewFrame();
     ImGui_ImplAndroid_NewFrame(width, height);
     ImGui::NewFrame();
@@ -79,8 +113,13 @@ void Drawing::InternalDrawMenu(int width, int height) {
     DrawFunction(width, height);
 
     ImGui::Render();
-
     ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+
+    // Restore GL state
+    glUseProgram(last_program);
+    glBindVertexArray(last_vertex_array);
+    glBindBuffer(GL_ARRAY_BUFFER, last_array_buffer);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, last_element_array_buffer);
 }
 
 EGLBoolean Drawing::SwapBuffersHook(EGLDisplay dpy, EGLSurface surf) {
@@ -96,9 +135,13 @@ EGLBoolean Drawing::SwapBuffersHook(EGLDisplay dpy, EGLSurface surf) {
     return SwapBuffers(dpy, surf);
 }
 
-void Drawing::InputHook(void *thiz, void *ex_ab, void *ex_ac) {
-    OriginalInput(thiz, ex_ab, ex_ac);
+void Drawing::InputHook(void *thiz, void *ex_ab, void *ex_ac, void *ex_ad) {
+    // Call original first to let it initialize the MotionEvent object
+    if (OriginalInput) {
+        ((void (*)(void *, void *, void *, void *))OriginalInput)(thiz, ex_ab, ex_ac, ex_ad);
+    }
 
-    // Handle the input event with ImGui
-    ImGui_ImplAndroid_HandleInputEvent((AInputEvent *)thiz);
+    if (ex_ab != nullptr && IsInitialized && GlWidth > 0 && GlHeight > 0) {
+        ImGui_ImplAndroid_HandleInputEvent((AInputEvent *)ex_ab);
+    }
 }

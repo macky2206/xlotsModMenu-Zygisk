@@ -16,11 +16,11 @@ void ModMenu::DrawMenu(int width, int height) {
 void ModMenu::HackThread() {
     Drawing::InitMenu(DrawMenu);
 
-    do {
-        LOGI("Waiting for target library to load to load");
+    while (!Utility::IsLibraryLoaded(TARGET_LIBRARY)) {
+        LOGI("Waiting for target library to load...");
         sleep(1);
-    } while (Utility::IsLibraryLoaded(TARGET_LIBRARY));
-    LOGI("Target library loaded at 0x%lu", Utility::GetBaseAddress(TARGET_LIBRARY));
+    }
+    LOGI("Target library loaded at 0x%lx", Utility::GetBaseAddress(TARGET_LIBRARY));
 
     //Hooks and Patches here
 

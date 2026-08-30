@@ -4,7 +4,7 @@
 #pragma once
 
 #include <EGL/egl.h>
-#include <GLES2/gl2.h>
+#include <GLES3/gl3.h>
 #include <functional>
 #include <utility>
 #include <unistd.h>
@@ -23,6 +23,6 @@ namespace Drawing
     void InternalDrawMenu(int width, int height);
 
     // Hooks
-    void InputHook(void *thiz, void *ex_ab, void *ex_ac);
+    void InputHook(void *thiz, void *ex_ab, void *ex_ac, void *ex_ad);
     EGLBoolean SwapBuffersHook(EGLDisplay dpy, EGLSurface surf);
 }
