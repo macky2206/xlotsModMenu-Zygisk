@@ -17,7 +17,8 @@ namespace Drawing
 {
     std::function<void(int, int)> DrawFunction = nullptr;
     EGLBoolean (*SwapBuffers)(EGLDisplay dpy, EGLSurface surf) = nullptr;
-    void (*OriginalInput)(void *thiz, void *ex_ab, void *ex_ac) = nullptr;
+    void (*OriginalInput)(void *thiz, void *ex_ab, void *ex_ac, void *ex_ad, void *ex_ae, void *ex_af) = nullptr;
+    int32_t (*OriginalConsume)(void *thiz, void *arg1, bool arg2, long arg3, uint32_t *arg4, AInputEvent **input_event) = nullptr;
     bool IsInitialized = false;
     int GlWidth = 0;
     int GlHeight = 0;
@@ -43,37 +44,42 @@ void Drawing::InitMenu(std::function<void(int, int)> drawFunction) {
         LOGE("Failed to find eglSwapBuffers in libEGL.so");
     }
 
-    // Try multiple symbols for input initialization (mangled names vary by Android version)
-    const char* inputSymbols[] = {
-        "_ZN7android13InputConsumer21initializeMotionEventEPNS_11MotionEventEPKNS_12InputMessageE",  // A10-A12
-        "_ZN7android13InputConsumer21initializeMotionEventEPNS_11MotionEventEPKNS_12InputMessageEb", // A13+
-        "_ZN7android13InputConsumer21initializeMotionEventEPNS_11MotionEventEPKNS_12InputMessageEv", // Fallback 1
-        "_ZN7android13InputConsumer21initializeMotionEventEPNS_11MotionEventEPNS_12InputMessageE"    // Fallback 2
-    };
+    // Prioritize Consume hook from ZygiskUnityMod
+    const char* consumeSym = "_ZN7android13InputConsumer7consumeEPNS_26InputEventFactoryInterfaceEblPjPPNS_10InputEventE";
+    void* consumeMethod = DobbySymbolResolver("libinput.so", consumeSym);
 
-    void* inputMethod = nullptr;
-    for (const char* sym : inputSymbols) {
-        LOGI("Trying to resolve input symbol: %s", sym);
-        inputMethod = DobbySymbolResolver("libinput.so", sym);
-        if (inputMethod) {
-            LOGI("SUCCESS: Found input symbol: %s at %p", sym, inputMethod);
-            break;
-        }
-    }
-
-    if (inputMethod) {
-        LOGI("Hooking inputMethod at %p...", inputMethod);
-        DobbyHook(inputMethod, (void *)InputHook, (void **)&OriginalInput);
-        LOGI("InputHook applied successfully");
+    if (consumeMethod) {
+        LOGI("SUCCESS: Found InputConsumer::consume at %p, hooking...", consumeMethod);
+        DobbyHook(consumeMethod, (void *)ConsumeHook, (void **)&OriginalConsume);
+        LOGI("ConsumeHook applied successfully");
     } else {
-        LOGE("CRITICAL: Failed to find ANY InputConsumer::initializeMotionEvent symbol in libinput.so");
-        LOGI("Falling back to search in libgui.so...");
-        inputMethod = DobbySymbolResolver("libgui.so", inputSymbols[0]);
-        if (inputMethod) {
-             LOGI("Found input symbol in libgui.so at %p", inputMethod);
-             DobbyHook(inputMethod, (void *)InputHook, (void **)&OriginalInput);
-        } else {
-             LOGE("Input initialization hook failed completely.");
+        LOGI("Falling back to initializeMotionEvent candidates...");
+        const char* inputLibs[] = {"libinput.so", "libgui.so", "libui.so"};
+        const char* inputSymbols[] = {
+            "_ZN7android13InputConsumer21initializeMotionEventEPNS_11MotionEventEPKNS_12InputMessageE",   // A10-A12
+            "_ZN7android13InputConsumer21initializeMotionEventEPNS_11MotionEventEPKNS_12InputMessageEb",  // A13
+            "_ZN7android13InputConsumer21initializeMotionEventEPNS_11MotionEventEPKNS_12InputMessageEbb", // A14+
+            "_ZN7android13InputConsumer21initializeMotionEventEPNS_11MotionEventEPKNS_12InputMessageEbbb",// A16+
+            "_ZN7android13InputConsumer21initializeMotionEventEPNS_11MotionEventEPNS_12InputMessageE"
+        };
+
+        void* inputMethod = nullptr;
+        for (const char* lib : inputLibs) {
+            if (!Utility::IsLibraryLoaded(lib)) continue;
+            for (const char* sym : inputSymbols) {
+                inputMethod = DobbySymbolResolver(lib, sym);
+                if (inputMethod) {
+                    LOGI("SUCCESS: Found %s in %s at %p", sym, lib, inputMethod);
+                    DobbyHook(inputMethod, (void *)InputHook, (void **)&OriginalInput);
+                    LOGI("InputHook applied successfully");
+                    break;
+                }
+            }
+            if (inputMethod) break;
+        }
+
+        if (!inputMethod) {
+            LOGE("CRITICAL: All input hooking methods failed.");
         }
     }
 
@@ -83,18 +89,17 @@ void Drawing::InitMenu(std::function<void(int, int)> drawFunction) {
 void Drawing::SetupMenu() {
     if (IsInitialized) return;
 
-    auto ctx = ImGui::CreateContext();
-    if (!ctx) {
-        LOGI("Failed to create context");
-        return;
+    if (ImGui::GetCurrentContext() != nullptr) {
+        ImGui::DestroyContext();
     }
 
+    ImGui::CreateContext();
     ImGuiIO& io = ImGui::GetIO();
     io.IniFilename = nullptr;
 
     // Setup Platform/Renderer backends
-    ImGui_ImplAndroid_Init(nullptr);
     ImGui_ImplOpenGL3_Init("#version 300 es");
+    ImGui_ImplAndroid_Init(nullptr);
 
     ImGui::GetStyle().ScaleAllSizes(2.0f);
 
@@ -108,7 +113,6 @@ void Drawing::InternalDrawMenu(int width, int height) {
     ImGuiIO& io = ImGui::GetIO();
     io.DisplaySize = ImVec2((float)width, (float)height);
 
-    // Initial font loading if not done
     static bool fontLoaded = false;
     if (!fontLoaded) {
         float systemScale = (float)width / 2220.0f;
@@ -118,11 +122,12 @@ void Drawing::InternalDrawMenu(int width, int height) {
     }
 
     // Backup GL state
-    GLint last_program, last_vertex_array, last_array_buffer, last_element_array_buffer;
+    GLint last_program, last_vertex_array, last_array_buffer, last_element_array_buffer, last_viewport[4];
     glGetIntegerv(GL_CURRENT_PROGRAM, &last_program);
     glGetIntegerv(GL_VERTEX_ARRAY_BINDING, &last_vertex_array);
     glGetIntegerv(GL_ARRAY_BUFFER_BINDING, &last_array_buffer);
     glGetIntegerv(GL_ELEMENT_ARRAY_BUFFER_BINDING, &last_element_array_buffer);
+    glGetIntegerv(GL_VIEWPORT, last_viewport);
 
     ImGui_ImplOpenGL3_NewFrame();
     ImGui_ImplAndroid_NewFrame(width, height);
@@ -131,6 +136,9 @@ void Drawing::InternalDrawMenu(int width, int height) {
     DrawFunction(width, height);
 
     ImGui::Render();
+
+    // Set full viewport for ImGui
+    glViewport(0, 0, width, height);
     ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 
     // Restore GL state
@@ -138,39 +146,50 @@ void Drawing::InternalDrawMenu(int width, int height) {
     glBindVertexArray(last_vertex_array);
     glBindBuffer(GL_ARRAY_BUFFER, last_array_buffer);
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, last_element_array_buffer);
+    glViewport(last_viewport[0], last_viewport[1], last_viewport[2], last_viewport[3]);
 }
 
 EGLBoolean Drawing::SwapBuffersHook(EGLDisplay dpy, EGLSurface surf) {
-    EGLint w, h;
-    if (eglQuerySurface(dpy, surf, EGL_WIDTH, &w) && eglQuerySurface(dpy, surf, EGL_HEIGHT, &h)) {
+    if (eglGetCurrentContext() == EGL_NO_CONTEXT) {
+        return SwapBuffers(dpy, surf);
+    }
+
+    // Use GL viewport for stability in Unity
+    GLint viewport[4];
+    glGetIntegerv(GL_VIEWPORT, viewport);
+    int w = viewport[2];
+    int h = viewport[3];
+
+    if (w > 0 && h > 0) {
         if (GlWidth != w || GlHeight != h) {
             LOGI("Surface dimensions changed: %dx%d -> %dx%d", GlWidth, GlHeight, w, h);
             GlWidth = w;
             GlHeight = h;
         }
-    }
 
-    SetupMenu();
-    InternalDrawMenu(w, h);
+        SetupMenu();
+        InternalDrawMenu(w, h);
+    }
 
     return SwapBuffers(dpy, surf);
 }
 
-void Drawing::InputHook(void *thiz, void *ex_ab, void *ex_ac, void *ex_ad) {
-    // Call original first to let it initialize the MotionEvent object
+void Drawing::InputHook(void *thiz, void *ex_ab, void *ex_ac, void *ex_ad, void *ex_ae, void *ex_af) {
     if (OriginalInput) {
-        ((void (*)(void *, void *, void *, void *))OriginalInput)(thiz, ex_ab, ex_ac, ex_ad);
-    } else {
-        LOGE("InputHook: OriginalInput is NULL!");
-        return;
+        OriginalInput(thiz, ex_ab, ex_ac, ex_ad, ex_ae, ex_af);
     }
 
-    if (ex_ab != nullptr && IsInitialized && GlWidth > 0 && GlHeight > 0) {
-        // Log touch event occasionally to avoid log flooding
-        static int touchCount = 0;
-        if (++touchCount % 100 == 0) {
-            LOGI("Processing touch event #%d", touchCount);
-        }
+    if (ex_ab != nullptr && IsInitialized) {
         ImGui_ImplAndroid_HandleInputEvent((AInputEvent *)ex_ab);
     }
+}
+
+int32_t Drawing::ConsumeHook(void *thiz, void *arg1, bool arg2, long arg3, uint32_t *arg4, AInputEvent **input_event) {
+    int32_t res = OriginalConsume(thiz, arg1, arg2, arg3, arg4, input_event);
+
+    if (IsInitialized && input_event && *input_event) {
+        ImGui_ImplAndroid_HandleInputEvent(*input_event);
+    }
+
+    return res;
 }
