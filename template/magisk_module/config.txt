@@ -1,0 +1,13 @@
+EnableModule=1
+NoCooldown=0
+UnlimitedMana=0
+AlwaysLowestWave=0
+UnlockTransmog=0
+RuneLevel=1
+SetRuneLevel=0
+ExpeditionMultiplier=1
+EnableExpeditionMultiplier=0
+SpeedHackValue=1
+FreeShopping=0
+Set0Prices=0
+ShowMenu=1
