@@ -22,7 +22,7 @@ android {
     }
     externalNativeBuild {
         ndkBuild {
-            path file('src/main/cpp/Build/Android.mk')
+            path file('src/main/cpp/External/Android.mk')
         }
     }
     ndkVersion = '27.0.12077973'
