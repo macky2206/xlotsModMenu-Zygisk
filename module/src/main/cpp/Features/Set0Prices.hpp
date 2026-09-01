@@ -72,8 +72,8 @@ namespace Features {
 }
 
 // Custom classes to handle UI updates using NEW SDK fields
-struct StatUI_Hook : GlobalNamespace::StatUI {
-    BNM_CustomClass(StatUI_Hook,
+struct StatUI : GlobalNamespace::StatUI {
+    BNM_CustomClass(StatUI,
                     BNM::CompileTimeClassBuilder("", "StatUI").Build(),
                     BNM::Defaults::Get<BNM::UnityEngine::MonoBehaviour>(), {});
 
@@ -107,8 +107,8 @@ struct StatUI_Hook : GlobalNamespace::StatUI {
     BNM_CustomMethod(LateUpdate, false, BNM::Defaults::Get<void>(), "LateUpdate");
 };
 
-struct SkillUI_Hook : GlobalNamespace::SkillUI {
-    BNM_CustomClass(SkillUI_Hook,
+struct SkillUI : GlobalNamespace::SkillUI {
+    BNM_CustomClass(SkillUI,
                     BNM::CompileTimeClassBuilder("", "SkillUI").Build(),
                     BNM::Defaults::Get<BNM::UnityEngine::MonoBehaviour>(), {});
 
