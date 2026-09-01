@@ -104,11 +104,11 @@ namespace Features {
 
     void InitAll() {
         LOGI("DaysBygone: Initializing hooks...");
-        SpeedHack::init();
-        FreeShop::init();
-        LowestWave::init();
-        Expedition::init();
-        Equipment::init();
+        // SpeedHack::init();
+        // FreeShop::init();
+        // LowestWave::init();
+        // Expedition::init();
+        // Equipment::init();
 
         // Separated feature
         set0Prices::init();

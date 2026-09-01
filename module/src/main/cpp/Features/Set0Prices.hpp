@@ -50,19 +50,19 @@ namespace Features {
         void init() {
             auto runeDir = BNM::Class("", "RuneDirectory");
             if (runeDir.IsValid()) {
-                auto m1 = runeDir.GetMethod("GKMCFIBOLDE");
+                auto m1 = runeDir.GetMethod("gdh");
                 if (m1.IsValid()) DobbyHook((void*)m1.GetOffset(), (void*)hook_RuneFusionCosts_1, (void**)&orig_RuneFusionCosts_1);
 
-                auto m2 = runeDir.GetMethod("BPLFGPOHEBN");
+                auto m2 = runeDir.GetMethod("gdi");
                 if (m2.IsValid()) DobbyHook((void*)m2.GetOffset(), (void*)hook_RuneFusionCosts_2, (void**)&orig_RuneFusionCosts_2);
 
-                auto m3 = runeDir.GetMethod("KNOFHCMOIMF");
+                auto m3 = runeDir.GetMethod("gdd");
                 if (m3.IsValid()) DobbyHook((void*)m3.GetOffset(), (void*)hook_RuneCloneCosts, (void**)&orig_RuneCloneCosts);
             }
 
             auto heroDir = BNM::Class("", "HeroDirectory");
             if (heroDir.IsValid()) {
-                auto m = heroDir.GetMethod("PIICFHCDDOA");
+                auto m = heroDir.GetMethod("gaj");
                 if (m.IsValid()) DobbyHook((void*)m.GetOffset(), (void*)hook_HeroAscensionCosts, (void**)&orig_HeroAscensionCosts);
             }
 
