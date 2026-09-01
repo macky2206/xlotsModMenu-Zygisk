@@ -21,11 +21,11 @@ namespace Settings {
     inline bool FreeShopping = false;
     inline bool Set0Prices = false;
     inline bool ShowMenu = true;
+    inline int MenuSize = 2;
 
     inline std::string ConfigPath;
     inline std::string BackupConfigPath = "/data/local/tmp/imgui_config.txt";
 
-    // Helper to trim whitespace and carriage returns
     inline std::string Trim(std::string s) {
         s.erase(std::remove(s.begin(), s.end(), '\r'), s.end());
         s.erase(std::remove(s.begin(), s.end(), '\n'), s.end());
@@ -34,10 +34,9 @@ namespace Settings {
         return s;
     }
 
-    inline void Save() {
-        if (ConfigPath.empty()) return;
-
-        std::ofstream file(ConfigPath);
+    inline void SaveTo(const std::string& path) {
+        if (path.empty()) return;
+        std::ofstream file(path);
         if (file.is_open()) {
             file << "EnableModule=" << (EnableModule ? "1" : "0") << "\n";
             file << "NoCooldown=" << (NoCooldown ? "1" : "0") << "\n";
@@ -52,18 +51,22 @@ namespace Settings {
             file << "FreeShopping=" << (FreeShopping ? "1" : "0") << "\n";
             file << "Set0Prices=" << (Set0Prices ? "1" : "0") << "\n";
             file << "ShowMenu=" << (ShowMenu ? "1" : "0") << "\n";
+            file << "MenuSize=" << MenuSize << "\n";
             file.close();
-            LOGI("Settings saved to %s", ConfigPath.c_str());
-        } else {
-            LOGE("Failed to save settings to %s", ConfigPath.c_str());
         }
+    }
+
+    inline void Save() {
+        // Save to BOTH locations to keep them synced
+        SaveTo(ConfigPath);
+        SaveTo(BackupConfigPath);
+        LOGI("Settings saved to both locations.");
     }
 
     inline bool LoadFrom(const std::string& path) {
         std::ifstream file(path);
         if (!file.is_open()) return false;
 
-        LOGI("Parsing config: %s", path.c_str());
         std::string line;
         while (std::getline(file, line)) {
             size_t pos = line.find('=');
@@ -84,6 +87,7 @@ namespace Settings {
                 else if (key == "FreeShopping") FreeShopping = (value == "1");
                 else if (key == "Set0Prices") Set0Prices = (value == "1");
                 else if (key == "ShowMenu") ShowMenu = (value == "1");
+                else if (key == "MenuSize") { try { MenuSize = std::stoi(value); } catch(...) {} }
             }
         }
         file.close();
@@ -91,15 +95,17 @@ namespace Settings {
     }
 
     inline void Load() {
-        // Try primary location
-        if (!ConfigPath.empty() && LoadFrom(ConfigPath)) {
-            LOGI("Settings loaded from primary: %s. EnableModule: %d", ConfigPath.c_str(), EnableModule);
+        // PRIORITIZE the backup path because that's what the WebUI writes to
+        if (LoadFrom(BackupConfigPath)) {
+            LOGI("Settings loaded from shared path (WebUI synced): %s", BackupConfigPath.c_str());
+            // Mirror to primary if possible
+            if (!ConfigPath.empty()) SaveTo(ConfigPath);
             return;
         }
 
-        // Try backup location
-        if (LoadFrom(BackupConfigPath)) {
-            LOGI("Settings loaded from backup: %s. EnableModule: %d", BackupConfigPath.c_str(), EnableModule);
+        // Fallback to primary if shared doesn't exist
+        if (!ConfigPath.empty() && LoadFrom(ConfigPath)) {
+            LOGI("Settings loaded from primary: %s", ConfigPath.c_str());
             return;
         }
 

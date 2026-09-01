@@ -9,6 +9,7 @@
 #include <functional>
 #include <utility>
 #include <unistd.h>
+#include <mutex>
 
 namespace Drawing
 {
@@ -19,6 +20,7 @@ namespace Drawing
     extern bool IsInitialized;
     extern int GlWidth;
     extern int GlHeight;
+    extern std::mutex ImGuiMutex;
 
     void InitMenu(std::function<void(int, int)> drawFunction);
     void SetupMenu();
