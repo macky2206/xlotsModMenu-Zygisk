@@ -1,9 +1,9 @@
 ext {
-    moduleLibraryName = "modmenu"
-    magiskModuleId = "imgui_modmenu"
-    moduleName = "ImGui Mod Menu"
-    moduleAuthor = "Reveny"
-    moduleDescription = "github.com/reveny"
-    moduleVersion = "v1.1.0"
-    moduleVersionCode = 110
+    moduleLibraryName = "xLots"
+    magiskModuleId = "dbxLots"
+    moduleName = "xLots Mod Menu - db"
+    moduleAuthor = "xLots"
+    moduleDescription = "github.com/xLots"
+    moduleVersion = "v1.0.0"
+    moduleVersionCode = 100
 }
