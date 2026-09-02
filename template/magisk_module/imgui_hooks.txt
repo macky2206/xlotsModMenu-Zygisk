@@ -1,0 +1,8 @@
+EnableModule=1
+MenuSize=2
+InitLowestWave=1
+InitExpedition=1
+InitEquipment=1
+InitSet0Prices=1
+InitRuneLevel=1
+InitStatsHack=1

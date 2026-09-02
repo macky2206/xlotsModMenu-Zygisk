@@ -10,7 +10,8 @@ INCLUDE_DIRS := $(BNM_LOCAL_PATH)/include \
                 $(BNM_LOCAL_PATH)/external \
                 $(BNM_LOCAL_PATH)/external/utf8 \
                 $(BNM_LOCAL_PATH)/src/private \
-                $(BNM_LOCAL_PATH)/../External/Dobby
+                $(BNM_LOCAL_PATH)/../External/Dobby \
+                $(BNM_LOCAL_PATH)/../Headers
 
 LOCAL_SRC_FILES := \
     $(BNM_LOCAL_PATH)/src/Class.cpp \

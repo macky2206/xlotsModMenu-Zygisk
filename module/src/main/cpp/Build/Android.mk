@@ -30,6 +30,7 @@ LOCAL_SRC_FILES := ../Main.cpp \
                    ../ModMenu.cpp \
                    ../Drawing.cpp \
                    ../Utility.cpp \
+                   ../LogManager.cpp \
                    ../xdl/xdl.c \
                    ../xdl/xdl_iterate.c \
                    ../xdl/xdl_linker.c \

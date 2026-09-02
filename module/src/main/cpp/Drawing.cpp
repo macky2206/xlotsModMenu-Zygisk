@@ -4,6 +4,7 @@
 #include <Headers/Drawing.hpp>
 #include <Headers/Logger.hpp>
 #include <Headers/Utility.hpp>
+#include <BNM/BNMIncludes.hpp>
 
 #include "dobby.h"
 #include "imgui.h"
@@ -24,6 +25,44 @@ namespace Drawing
     int GlWidth = 0;
     int GlHeight = 0;
     std::mutex ImGuiMutex;
+
+    // Soft Keyboard Helper
+    void UpdateSoftKeyboard() {
+        static bool lastWantTextInput = false;
+        bool wantTextInput = ImGui::GetIO().WantTextInput;
+
+        if (wantTextInput != lastWantTextInput) {
+            if (wantTextInput) {
+                // Find TouchScreenKeyboard.Open in UnityEngine.CoreModule
+                auto image = BNM::Image("UnityEngine.CoreModule.dll");
+                auto keyboardClass = BNM::Class("UnityEngine", "TouchScreenKeyboard", image);
+
+                if (keyboardClass.IsValid()) {
+                    // Try 8-argument version first (it's very common)
+                    auto open8 = keyboardClass.GetMethod("Open", 8);
+                    auto emptyStr = BNM::CreateMonoString("");
+
+                    if (open8.IsValid()) {
+                        // Open(text, type:0, autocorrect:false, multiline:false, secure:false, alert:false, placeholder:"", charLimit:0)
+                        open8.cast<void*>().Call(emptyStr, 0, false, false, false, false, emptyStr, 0);
+                        LOGI("Drawing: Opened Keyboard (8-arg)");
+                    } else {
+                        // Try 5-argument version
+                        auto open5 = keyboardClass.GetMethod("Open", 5);
+                        if (open5.IsValid()) {
+                            open5.cast<void*>().Call(emptyStr, 0, false, false, false);
+                            LOGI("Drawing: Opened Keyboard (5-arg)");
+                        } else {
+                            LOGE("Drawing: Could not find any TouchScreenKeyboard.Open method!");
+                        }
+                    }
+                } else {
+                    LOGE("Drawing: Could not find UnityEngine.TouchScreenKeyboard class!");
+                }
+            }
+            lastWantTextInput = wantTextInput;
+        }
+    }
 }
 
 void Drawing::InitMenu(std::function<void(int, int)> drawFunction) {
@@ -85,6 +124,8 @@ void Drawing::InternalDrawMenu(int width, int height) {
     ImGui::NewFrame();
 
     DrawFunction(width, height);
+
+    UpdateSoftKeyboard();
 
     ImGui::Render();
 

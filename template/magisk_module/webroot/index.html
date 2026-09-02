@@ -3,169 +3,189 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ImGui Mod Menu Config</title>
+    <title>xLots Mod Menu Config</title>
     <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="bg-gray-900 text-white p-4 font-sans">
-    <div class="max-w-md mx-auto space-y-6">
+    <div class="max-w-md mx-auto space-y-6 pb-20">
         <header class="flex justify-between items-center">
-            <h1 class="text-2xl font-bold text-blue-400">Mod Menu Settings</h1>
-            <button id="saveBtn" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded shadow transition">Save</button>
+            <div>
+                <h1 class="text-2xl font-bold text-blue-400">xLots Hook Config</h1>
+                <p id="statusText" class="text-[10px] text-gray-500 italic">Syncing with KernelSU...</p>
+            </div>
+            <div class="space-x-2">
+                <button id="reloadBtn" class="bg-gray-700 hover:bg-gray-600 text-white px-3 py-2 rounded text-xs transition">Reload</button>
+                <button id="saveBtn" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded shadow transition font-bold">Save</button>
+            </div>
         </header>
 
         <!-- Master Switch -->
-        <div class="bg-gray-800 p-4 rounded-lg flex justify-between items-center border-l-4 border-blue-500">
+        <div class="bg-gray-800 p-4 rounded-lg flex justify-between items-center border-l-4 border-blue-500 shadow-lg">
             <div>
-                <h3 class="font-semibold">Master Enable</h3>
-                <p class="text-xs text-gray-400">Enable/Disable the entire module</p>
+                <h3 class="font-semibold text-gray-100">Master Enable</h3>
+                <p class="text-[10px] text-gray-400">Toggle all mod functionality</p>
             </div>
-            <input type="checkbox" id="EnableModule" class="w-6 h-6 rounded bg-gray-700 checked:bg-blue-500 border-none">
+            <input type="checkbox" id="EnableModule" class="w-6 h-6 rounded bg-gray-700 checked:bg-blue-500 border-none transition">
         </div>
 
-        <!-- Main Features -->
+        <!-- Hook Initialization Controls -->
         <section class="space-y-3">
-            <h2 class="text-gray-400 uppercase text-xs font-bold tracking-widest">Main Features</h2>
-            <div id="featureList" class="bg-gray-800 rounded-lg divide-y divide-gray-700 overflow-hidden">
-                <!-- Checkboxes will be injected here -->
+            <h2 class="text-blue-400 uppercase text-[10px] font-bold tracking-widest px-1">Hook Control (App Startup)</h2>
+            <div id="initList" class="bg-gray-800 rounded-lg divide-y divide-gray-700 overflow-hidden border border-gray-700 shadow-md">
+                <!-- Init toggles injected here -->
             </div>
         </section>
 
-        <!-- Multipliers -->
-        <section class="space-y-3">
-            <h2 class="text-gray-400 uppercase text-xs font-bold tracking-widest">Multipliers</h2>
-            <div id="sliderList" class="bg-gray-800 p-4 rounded-lg space-y-6">
-                <!-- Sliders will be injected here -->
+        <!-- Log Box -->
+        <section class="space-y-2 opacity-80">
+            <div class="flex justify-between items-center px-1">
+                <h2 class="text-gray-500 uppercase text-[10px] font-bold">Logcat Preview</h2>
+                <button onclick="document.getElementById('debugLog').innerText = ''" class="text-[8px] text-gray-600 underline">Clear</button>
+            </div>
+            <div id="debugLog" class="bg-black p-3 rounded border border-gray-800 text-[9px] text-green-500 font-mono overflow-y-auto max-h-40 leading-relaxed break-all">
+                Initializing bridge...
             </div>
         </section>
     </div>
 
     <script>
-        const configPath = "/data/local/tmp/imgui_config.txt";
+        const configPath = "/data/local/tmp/imgui_hooks.txt";
+        let configData = {};
+        const statusText = document.getElementById('statusText');
+        const debugLog = document.getElementById('debugLog');
 
-        // Define settings structure
-        const settings = {
-            checkboxes: [
-                { id: "NoCooldown", label: "No Spell Cooldown" },
-                { id: "UnlimitedMana", label: "Unlimited Mana" },
-                { id: "AlwaysLowestWave", label: "Always Lowest Wave" },
-                { id: "UnlockTransmog", label: "Unlock All Transmogs" },
-                { id: "SetRuneLevel", label: "Override Rune Level" },
-                { id: "EnableExpeditionMultiplier", label: "Enable Expedition Multiplier" },
-                { id: "FreeShopping", label: "Free Shopping" },
-                { id: "Set0Prices", label: "Set Prices to 0" },
-                // { id: "ShowMenu", label: "Show In-Game Menu Overlay" }
-            ],
-            sliders: [
-                { id: "SpeedHackValue", label: "Speed Hack", min: 1, max: 25 },
-                { id: "RuneLevel", label: "Custom Rune Level", min: 1, max: 20 },
-                { id: "ExpeditionMultiplier", label: "Expedition Multiplier", min: 1, max: 20 }
-            ]
-        };
+        const hookSettings = [
+            { id: "InitLowestWave", label: "Hook Lowest Wave" },
+            { id: "InitExpedition", label: "Hook Expedition" },
+            { id: "InitEquipment", label: "Hook Equipment" },
+            { id: "InitSet0Prices", label: "Hook Set 0 Prices" },
+            { id: "InitRuneLevel", label: "Hook Rune Level" },
+            { id: "InitStatsHack", label: "Hook Stats Hack" }
+        ];
 
-        // Render UI
-        const featureList = document.getElementById('featureList');
-        settings.checkboxes.forEach(item => {
+        // Render Hook Toggles
+        const initList = document.getElementById('initList');
+        hookSettings.forEach(item => {
             const div = document.createElement('div');
-            div.className = "p-4 flex justify-between items-center hover:bg-gray-750 transition";
+            div.className = "p-4 flex justify-between items-center hover:bg-gray-750 transition active:bg-gray-700";
             div.innerHTML = `
-                <label for="${item.id}" class="flex-1 cursor-pointer font-medium">${item.label}</label>
-                <input type="checkbox" id="${item.id}" class="w-5 h-5 rounded bg-gray-700 checked:bg-blue-500 border-none">
+                <label for="${item.id}" class="flex-1 cursor-pointer font-medium text-gray-300">${item.label}</label>
+                <input type="checkbox" id="${item.id}" class="w-5 h-5 rounded bg-gray-700 checked:bg-blue-600 border-none transition">
             `;
-            featureList.appendChild(div);
+            initList.appendChild(div);
         });
 
-        const sliderList = document.getElementById('sliderList');
-        settings.sliders.forEach(item => {
-            const div = document.createElement('div');
-            div.innerHTML = `
-                <div class="flex justify-between mb-2">
-                    <span class="text-sm font-medium text-gray-300">${item.label}</span>
-                    <span id="${item.id}_val" class="text-blue-400 font-bold">1</span>
-                </div>
-                <input type="range" id="${item.id}" min="${item.min}" max="${item.max}" value="1"
-                    class="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-blue-500"
-                    oninput="document.getElementById('${item.id}_val').innerText = this.value">
-            `;
-            sliderList.appendChild(div);
-        });
+        function addLog(msg, color = "") {
+            const span = document.createElement('div');
+            if(color) span.style.color = color;
+            span.innerText = `[${new Date().toLocaleTimeString()}] ${msg}`;
+            debugLog.appendChild(span);
+            debugLog.scrollTop = debugLog.scrollHeight;
+        }
 
-        // KSU Bridge Functions
         async function loadConfig() {
+            addLog("Attempting to read " + configPath);
+            statusText.innerText = "Reading file...";
+
             try {
-                // Read file via shell
-                const { stdout } = await window.ksu.exec(`cat ${configPath}`);
-                if (!stdout) return;
+                const res = await window.ksu.exec(`cat ${configPath} 2>/dev/null`);
 
-                const lines = stdout.split('\n');
+                if (!res || res.stdout === undefined) {
+                    addLog("Warning: Bridge returned empty response. File might be missing.", "yellow");
+                    statusText.innerText = "Ready (No config found)";
+                    return;
+                }
+
+                const content = res.stdout;
+                addLog("File found. Size: " + content.length + " bytes");
+
+                const lines = content.split(/\r?\n/);
+                let count = 0;
+
+                configData = {};
+
                 lines.forEach(line => {
-                    const [key, value] = line.split('=');
-                    if (!key) return;
+                    if (!line.trim() || !line.includes('=')) return;
 
-                    const el = document.getElementById(key.trim());
-                    if (el) {
-                        if (el.type === 'checkbox') {
-                            el.checked = value.trim() === '1';
-                        } else {
-                            el.value = value.trim();
-                            const valDisplay = document.getElementById(`${key.trim()}_val`);
-                            if (valDisplay) valDisplay.innerText = el.value;
-                        }
+                    const parts = line.split('=');
+                    const key = parts[0].trim();
+                    const value = parts[1].trim().replace(/\r/g, ''); // Aggressive trim
+
+                    configData[key] = value;
+
+                    const el = document.getElementById(key);
+                    if (el && el.type === 'checkbox') {
+                        el.checked = (value === '1');
+                        count++;
                     }
                 });
+
+                statusText.innerText = `Successfully loaded ${count} settings.`;
+                addLog(`Success: Parsed ${count} keys from file.`, "#4ade80");
             } catch (e) {
-                console.error("Failed to load config:", e);
+                statusText.innerText = "Load Failed";
+                addLog("CRASH: " + e.toString(), "red");
             }
         }
 
         async function saveConfig() {
             const saveBtn = document.getElementById('saveBtn');
-            saveBtn.innerText = "Saving...";
+            saveBtn.innerText = "Wait...";
             saveBtn.disabled = true;
 
             try {
+                // Refresh master object from UI
+                configData["EnableModule"] = document.getElementById("EnableModule").checked ? '1' : '0';
+                hookSettings.forEach(item => {
+                    const el = document.getElementById(item.id);
+                    if (el) configData[item.id] = el.checked ? '1' : '0';
+                });
+
+                // Build config string using \n for shell printf
                 let configStr = "";
+                for (const [key, value] of Object.entries(configData)) {
+                    if (key && value !== undefined) {
+                        configStr += `${key}=${value}\\n`;
+                    }
+                }
 
-                // Collect Master Switch
-                const master = document.getElementById("EnableModule");
-                configStr += `EnableModule=${master.checked ? '1' : '0'}\n`;
+                addLog("Writing to disk...");
 
-                // Collect Checkboxes
-                settings.checkboxes.forEach(item => {
-                    const el = document.getElementById(item.id);
-                    configStr += `${item.id}=${el.checked ? '1' : '0'}\n`;
-                });
+                // Write and ensure permissions
+                const writeRes = await window.ksu.exec(`printf "${configStr}" > ${configPath} && chmod 666 ${configPath}`);
 
-                // Collect Sliders
-                settings.sliders.forEach(item => {
-                    const el = document.getElementById(item.id);
-                    configStr += `${item.id}=${el.value}\n`;
-                });
-
-                // Write file via shell (KernelSU has root access)
-                await window.ksu.exec(`printf "${configStr}" > ${configPath}`);
-
-                // Set permissions
-                await window.ksu.exec(`chmod 666 ${configPath}`);
+                if (writeRes.stderr) {
+                    addLog("Shell Error: " + writeRes.stderr, "red");
+                }
 
                 saveBtn.innerText = "Saved!";
+                addLog("Configuration saved successfully!", "#4ade80");
                 setTimeout(() => {
                     saveBtn.innerText = "Save";
                     saveBtn.disabled = false;
                 }, 1500);
             } catch (e) {
-                alert("Error saving config: " + e.message);
-                saveBtn.innerText = "Save Error";
+                addLog("Save Failed: " + e.message, "red");
+                alert("Error: " + e.message);
+                saveBtn.innerText = "Error";
                 saveBtn.disabled = false;
             }
         }
 
         document.getElementById('saveBtn').onclick = saveConfig;
+        document.getElementById('reloadBtn').onclick = loadConfig;
 
-        // Initialize
+        // Bridge initial load
         if (window.ksu) {
             loadConfig();
         } else {
-            document.body.innerHTML = '<div class="p-10 text-center text-red-500 font-bold">KernelSU Manager not detected. This WebUI only works inside the KernelSU app.</div>';
+            setTimeout(() => {
+                if (window.ksu) loadConfig();
+                else {
+                    statusText.innerText = "KSU Bridge Missing";
+                    addLog("Error: KernelSU bridge not detected. Are you in the KSU app?", "red");
+                }
+            }, 500);
         }
     </script>
 </body>

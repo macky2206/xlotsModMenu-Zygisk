@@ -119,8 +119,6 @@ inline void Unhook(PTR_T ptr) {
 }
 */
 
-
-// Dobby
 #include <dobby.h>
 
 template<typename PTR_T, typename NEW_T, typename T_OLD>
@@ -140,30 +138,6 @@ inline void Unhook(PTR_T ptr) {
     if ((void *) ptr != nullptr) DobbyDestroy((void *)ptr);
 }
 
-// Dummy
-/*
-#include <cassert>
-
-static_assert(false, "No hooking software!");
-
-template<typename PTR_T, typename NEW_T, typename T_OLD>
-inline void *BasicHook(PTR_T ptr, NEW_T newMethod, T_OLD &oldBytes) {
-    if ((void *) ptr != nullptr) ((void)0);
-    return nullptr;
-}
-
-template<typename PTR_T, typename NEW_T, typename T_OLD>
-inline void *BasicHook(PTR_T ptr, NEW_T newMethod, T_OLD &&oldBytes) {
-    if ((void *) ptr != nullptr) ((void)0);
-    return nullptr;
-}
-
-template<typename PTR_T>
-inline void Unhook(PTR_T ptr) {
-    if ((void *) ptr != nullptr) ((void)0);
-}
-*/
-
 #include <dlfcn.h>
 
 // Если вам нужно скрыть вызовы dlfcn или использовать ваш dl для загрузки BNM в игре извне
@@ -182,6 +156,7 @@ inline void Unhook(PTR_T ptr) {
 #define BNM_free free
 
 #include <android/log.h>
+#include "LogManager.hpp"
 
 #define BNM_TAG "ByNameModding"
 
@@ -191,31 +166,32 @@ inline void Unhook(PTR_T ptr) {
 #define BNM_CHECK_SELF(returnValue) ((void)0)
 #endif
 
+// Redirect BNM logs to In-Game Menu
 #ifdef BNM_INFO
-#define BNM_LOG_INFO(...) ((void)__android_log_print(4, BNM_TAG, __VA_ARGS__))
+#define BNM_LOG_INFO(...) LogManager::AddLog(4, BNM_TAG, __VA_ARGS__)
 #else
 #define BNM_LOG_INFO(...) ((void)0)
 #endif
 
 #ifdef BNM_DEBUG
-#define BNM_LOG_DEBUG(...) ((void)__android_log_print(3, BNM_TAG, __VA_ARGS__))
-#define BNM_LOG_DEBUG_IF(condition, ...) if (condition) ((void)__android_log_print(3, BNM_TAG, __VA_ARGS__))
+#define BNM_LOG_DEBUG(...) LogManager::AddLog(3, BNM_TAG, __VA_ARGS__)
+#define BNM_LOG_DEBUG_IF(condition, ...) if (condition) LogManager::AddLog(3, BNM_TAG, __VA_ARGS__)
 #else
 #define BNM_LOG_DEBUG(...) ((void)0)
 #define BNM_LOG_DEBUG_IF(...) ((void)0)
 #endif
 
 #ifdef BNM_ERROR
-#define BNM_LOG_ERR(...) ((void)__android_log_print(6, BNM_TAG, __VA_ARGS__))
-#define BNM_LOG_ERR_IF(condition, ...) if (condition) ((void)__android_log_print(6, BNM_TAG, __VA_ARGS__))
+#define BNM_LOG_ERR(...) LogManager::AddLog(6, BNM_TAG, __VA_ARGS__)
+#define BNM_LOG_ERR_IF(condition, ...) if (condition) LogManager::AddLog(6, BNM_TAG, __VA_ARGS__)
 #else
 #define BNM_LOG_ERR(...) ((void)0)
 #define BNM_LOG_ERR_IF(condition, ...) ((void)0)
 #endif
 
 #ifdef BNM_WARNING
-#define BNM_LOG_WARN(...) ((void)__android_log_print(5, BNM_TAG, __VA_ARGS__))
-#define BNM_LOG_WARN_IF(condition, ...) if (condition) ((void)__android_log_print(5, BNM_TAG, __VA_ARGS__))
+#define BNM_LOG_WARN(...) LogManager::AddLog(5, BNM_TAG, __VA_ARGS__)
+#define BNM_LOG_WARN_IF(condition, ...) if (condition) LogManager::AddLog(5, BNM_TAG, __VA_ARGS__)
 #else
 #define BNM_LOG_WARN(...) ((void)0)
 #define BNM_LOG_WARN_IF(condition, ...) ((void)0)
